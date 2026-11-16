@@ -81,3 +81,19 @@ export const POWERUP = {
   magnetTime: 8,
   slowTime: 5,
 };
+
+// The Night Sovereign, boss of wave 8: six dash-hits to break.
+export const BOSS = {
+  radius: 34,
+  hp: 6,
+  speed: 56,
+  summonInterval: 5,
+  lungeRange: 300,
+  lungeWindup: 0.7,
+  lungeTime: 0.5,
+  lungeMult: 3.0,
+  score: 250,
+};
+
+// Golden moon-pollen: rare, bright, worth three carried.
+export const GOLDEN = { chance: 0.06, carry: 3, score: 15, charge: 12 };

@@ -99,6 +99,19 @@ export function createAudio() {
       [440, 554.37, 659.25, 880].forEach((f, i) => this.tone(f, 0.16, 'sine', 0.14, i * 0.05));
     },
 
+    // The Sovereign wakes: a low swell that says something big is here.
+    roar() {
+      if (!this.ensure()) return;
+      this.tone(220, 0.7, 'sawtooth', 0.14, 0, 55);
+      this.tone(110, 0.8, 'sine', 0.2, 0, 40);
+    },
+
+    // One tick per second in the last ten seconds of a wave.
+    tick() {
+      if (!this.ensure()) return;
+      this.tone(1200, 0.05, 'square', 0.07);
+    },
+
     waveClear() {
       if (!this.ensure()) return;
       [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>

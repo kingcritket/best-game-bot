@@ -6,6 +6,7 @@
 
 import { VIEW } from './config.js';
 import { createWorld, startGame } from './world.js';
+import { createBoss } from './boss.js';
 import { range } from './random.js';
 
 function placeWisps(world, n, kinds) {
@@ -69,22 +70,29 @@ export function stageShot(name, seed) {
   ];
   scatterPollen(world, 14);
   if (name === 'play') {
+    // The climax: wave 8, quota banked, the Sovereign half-broken.
     world.state = 'playing';
-    world.wave = 3;
-    world.quota = 20;
-    world.bankedWave = 11;
-    world.bankedTotal = 41;
-    world.score = 1240;
-    world.carried = 6;
-    world.combo = 12;
+    world.wave = 8;
+    world.quota = 40;
+    world.bankedWave = 40;
+    world.bankedTotal = 148;
+    world.bossPhase = true;
+    world.boss = createBoss(world);
+    world.boss.hp = 3;
+    world.boss.x = 640;
+    world.boss.y = 210;
+    world.boss.telegraph = 0.4;
+    world.score = 3420;
+    world.carried = 4;
+    world.combo = 9;
     world.comboTimer = 2.0;
-    world.maxCombo = 12;
-    world.lives = 3;
-    world.charge = 68;
+    world.maxCombo = 14;
+    world.lives = 2;
+    world.charge = 55;
     world.waveTimeLeft = 47;
-    world.banner = { text: 'Wave 3 — the dark deepens', sub: 'Bank 20 pollen before the night ends' };
+    world.banner = { text: 'Break the Night Sovereign!', sub: 'The quota is banked — scatter the boss to win' };
     world.bannerT = 2.0;
-    placeWisps(world, 4, ['chaser', 'splitter', 'lunger', 'chaser']);
+    placeWisps(world, 3, ['chaser', 'splitter', 'lunger']);
     world.powerups.push({ x: 150, y: 150, kind: 'magnet', phase: 1, life: 10 });
     world.particles.push(
       { x: 620, y: 330, vx: 30, vy: -40, life: 0.6, maxLife: 0.9, size: 3, color: '#ffe66d' },
@@ -96,13 +104,13 @@ export function stageShot(name, seed) {
   if (name === 'win') {
     world.state = 'win';
     world.wave = 8;
-    world.score = 4860;
-    world.bankedTotal = 148;
+    world.score = 5420;
+    world.bankedTotal = 188;
     world.bankedWave = 40;
-    world.stats = { collected: 172, wispsScattered: 23, dashes: 31, powerups: 5 };
+    world.stats = { collected: 214, wispsScattered: 31, dashes: 38, powerups: 6 };
     world.maxCombo = 21;
-    world.endedAt = 512;
-    world.best = 4860;
+    world.endedAt = 540;
+    world.best = 5420;
     world.lives = 2;
     world.particles.push(
       { x: 480, y: 300, vx: 40, vy: -80, life: 0.7, maxLife: 0.9, size: 4, color: '#ffd166' },

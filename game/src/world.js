@@ -6,8 +6,9 @@
 // waves and the garden blooms — that is the win. Lose all three lives and
 // the light goes out.
 
-import { VIEW, PALETTE, PLAYER, POLLEN, WISP, WAVES, COMBO, SCORE, POWERUP } from './config.js';
+import { VIEW, PALETTE, PLAYER, POLLEN, WISP, WAVES, COMBO, SCORE, POWERUP, BOSS, GOLDEN } from './config.js';
 import { makeRng, range, pick, chance, clamp, dist2 } from './random.js';
+import { createBoss, updateBoss } from './boss.js';
 
 const BLOOM = { x: VIEW.w / 2, y: VIEW.h / 2, baseRadius: 46 };
 const MARGIN = 26;
@@ -63,10 +64,14 @@ export function createWorld(seed = 20261116) {
     wisps: [],
     powerups: [],
     particles: [],
+    rings: [],
     texts: [],
     flowers: [],
     fireflies: [],
     petals: [],
+    boss: null,
+    bossPhase: false,
+    lastTick: -1,
     shake: 0,
     flash: 0,
     banner: null,
@@ -146,6 +151,7 @@ function spawnPollen(world, n = 1) {
       vy: range(world.rng, -12, 12),
       phase: range(world.rng, 0, Math.PI * 2),
       size: range(world.rng, 4, 6.5),
+      golden: chance(world.rng, GOLDEN.chance),
     });
   }
 }
@@ -277,6 +283,13 @@ function clearWave(world, audio) {
   audio.waveClear();
   burst(world, BLOOM.x, BLOOM.y, PALETTE.bloom, 40, 220, 4);
   if (world.wave >= WAVES.total) {
+    // Wave 8 is won only when the Sovereign is broken. Bank the quota
+    // first and the night timer stops: the hunt itself is the ending.
+    if (world.boss && world.boss.hp > 0) {
+      world.bossPhase = true;
+      showBanner(world, 'The quota is banked', 'Break the Night Sovereign to free the garden!');
+      return;
+    }
     endGame(world, audio, true);
     return;
   }
@@ -286,11 +299,32 @@ function clearWave(world, audio) {
   world.waveTimeLeft = WAVES.timePerWave;
   world.wisps.length = 0;
   world.intermission = 1.2;
-  showBanner(
-    world,
-    'Wave ' + world.wave + ' — the dark deepens',
-    'Bank ' + world.quota + ' pollen before the night ends',
-  );
+  if (world.wave === WAVES.total) {
+    world.boss = createBoss(world);
+    audio.roar();
+    showBanner(world, 'Wave 8 — the Night Sovereign wakes', 'Bank 40 pollen — and break the Sovereign');
+  } else {
+    showBanner(
+      world,
+      'Wave ' + world.wave + ' — the dark deepens',
+      'Bank ' + world.quota + ' pollen before the night ends',
+    );
+  }
+}
+
+function bossDown(world, audio) {
+  const boss = world.boss;
+  world.boss = null;
+  world.stats.wispsScattered += 1;
+  addScore(world, BOSS.score * comboMult(world.combo));
+  burst(world, boss.x, boss.y, PALETTE.wispCore, 50, 280, 4);
+  floatText(world, boss.x, boss.y - 44, '+' + BOSS.score * comboMult(world.combo), PALETTE.wispCore);
+  audio.wispPop();
+  if (world.bossPhase) {
+    endGame(world, audio, true);
+  } else {
+    showBanner(world, 'The Sovereign is broken!', 'Bank the quota to free the garden');
+  }
 }
 
 function nightRunsOut(world, audio) {
@@ -369,15 +403,25 @@ export function updateWorld(world, dt, input, audio) {
     world.dashCooldown = PLAYER.dashCooldown;
     world.charge -= PLAYER.dashCost;
     world.stats.dashes += 1;
+    world.rings.push({ x: p.x, y: p.y, r: 8, maxR: 84, life: 0.35, maxLife: 0.35 });
     burst(world, p.x, p.y, PALETTE.mothWing, 10, 90, 2.5);
     audio.dash();
   }
 
-  // --- Wave timer ---
-  world.waveTimeLeft -= dt;
-  if (world.waveTimeLeft <= 0) {
-    nightRunsOut(world, audio);
-    if (world.state !== 'playing') return;
+  // --- Wave timer: frozen once the quota is banked on wave 8, so the
+  // boss hunt is decided by lives, not by the clock. Ticks in the last
+  // ten seconds of a wave.
+  if (!world.bossPhase) {
+    world.waveTimeLeft -= dt;
+    const s = Math.ceil(world.waveTimeLeft);
+    if (s <= 10 && s >= 1 && s !== world.lastTick) {
+      world.lastTick = s;
+      audio.tick();
+    }
+    if (world.waveTimeLeft <= 0) {
+      nightRunsOut(world, audio);
+      if (world.state !== 'playing') return;
+    }
   }
 
   // --- Pollen spawning, drift and collection ---
@@ -404,14 +448,16 @@ export function updateWorld(world, dt, input, audio) {
     }
     if (d2 < POLLEN.collectRadius * POLLEN.collectRadius) {
       world.pollen.splice(i, 1);
-      world.carried += 1;
+      const gain = o.golden ? GOLDEN.carry : 1;
+      world.carried += gain;
       world.combo += 1;
       world.comboTimer = COMBO.window;
       world.maxCombo = Math.max(world.maxCombo, world.combo);
-      world.charge = Math.min(100, world.charge + POLLEN.chargeGain);
+      world.charge = Math.min(100, world.charge + (o.golden ? GOLDEN.charge : POLLEN.chargeGain));
       world.stats.collected += 1;
-      addScore(world, SCORE.collect * comboMult(world.combo));
-      burst(world, o.x, o.y, PALETTE.pollen, 6, 70, 2);
+      addScore(world, (o.golden ? GOLDEN.score : SCORE.collect) * comboMult(world.combo));
+      burst(world, o.x, o.y, o.golden ? '#ffd166' : PALETTE.pollen, o.golden ? 12 : 6, o.golden ? 120 : 70, o.golden ? 3 : 2);
+      if (o.golden) floatText(world, o.x, o.y - 18, '+3 MOON POLLEN', '#ffd166');
       audio.pickup(world.combo);
     }
   }
@@ -510,6 +556,41 @@ export function updateWorld(world, dt, input, audio) {
     }
   }
 
+  // --- The Night Sovereign (wave 8) ---
+  if (world.boss) {
+    const ev = updateBoss(world, dt, audio);
+    if (ev.dashHit) {
+      const boss = world.boss;
+      boss.hp -= 1;
+      boss.flashT = 0.25;
+      const dx = boss.x - p.x;
+      const dy = boss.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      boss.x = clamp(boss.x + (dx / d) * 26, 30, 930);
+      boss.y = clamp(boss.y + (dy / d) * 26, 44, 570);
+      world.combo += 2;
+      world.comboTimer = COMBO.window;
+      burst(world, boss.x, boss.y, PALETTE.wispCore, 20, 200, 3);
+      floatText(world, boss.x, boss.y - 44, 'The Sovereign cracks! ' + Math.max(0, boss.hp) + '/6', '#cfc6ff');
+      audio.wispPop();
+      if (boss.hp <= 0) {
+        bossDown(world, audio);
+        if (world.state !== 'playing') return;
+      }
+    }
+    if (world.boss && ev.touched) {
+      const boss = world.boss;
+      const dx = boss.x - p.x;
+      const dy = boss.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      boss.x = clamp(boss.x + (dx / d) * 20, 30, 930);
+      boss.y = clamp(boss.y + (dy / d) * 20, 44, 570);
+      burst(world, boss.x, boss.y, PALETTE.wisp, 12, 140, 3);
+      hurtPlayer(world, audio);
+      if (world.state !== 'playing') return;
+    }
+  }
+
   // --- Power-ups ---
   world.powerupTimer -= dt;
   if (world.powerupTimer <= 0) {
@@ -557,7 +638,7 @@ export function updateWorld(world, dt, input, audio) {
     f.y += Math.cos(f.phase * 0.7) * 6 * dt;
   }
 
-  // --- Particles and floating texts decay ---
+  // --- Particles, shockwave rings and floating texts decay ---
   for (let i = world.particles.length - 1; i >= 0; i--) {
     const pt = world.particles[i];
     pt.life -= dt;
@@ -566,6 +647,12 @@ export function updateWorld(world, dt, input, audio) {
     pt.vx *= 0.98;
     pt.vy *= 0.98;
     if (pt.life <= 0) world.particles.splice(i, 1);
+  }
+  for (let i = world.rings.length - 1; i >= 0; i--) {
+    const r = world.rings[i];
+    r.life -= dt;
+    r.r += (r.maxR - r.r) * dt * 6;
+    if (r.life <= 0) world.rings.splice(i, 1);
   }
   for (let i = world.texts.length - 1; i >= 0; i--) {
     const t = world.texts[i];

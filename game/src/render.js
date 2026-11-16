@@ -4,6 +4,7 @@
 
 import { VIEW, PALETTE, PLAYER, WAVES } from './config.js';
 import { BLOOM, comboMult, waveQuota } from './world.js';
+import { drawBoss } from './boss.js';
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -54,6 +55,44 @@ function drawBackground(ctx, world) {
   ctx.closePath();
   ctx.fill();
 
+  // A low moon, the garden's only lamp besides the bloom.
+  ctx.save();
+  const moon = ctx.createRadialGradient(828, 84, 8, 828, 84, 90);
+  moon.addColorStop(0, 'rgba(255, 244, 200, 0.9)');
+  moon.addColorStop(0.45, 'rgba(255, 240, 190, 0.28)');
+  moon.addColorStop(1, 'rgba(255, 240, 190, 0)');
+  ctx.fillStyle = moon;
+  ctx.beginPath();
+  ctx.arc(828, 84, 90, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fdf3c8';
+  ctx.beginPath();
+  ctx.arc(828, 84, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(214, 196, 150, 0.55)';
+  ctx.beginPath();
+  ctx.arc(816, 74, 7, 0, Math.PI * 2);
+  ctx.arc(840, 94, 5, 0, Math.PI * 2);
+  ctx.arc(830, 66, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Distant pine silhouettes rooted on the hill.
+  ctx.save();
+  ctx.fillStyle = 'rgba(10, 14, 38, 0.85)';
+  for (let i = 0; i < 9; i++) {
+    const tx = 20 + i * 108 + (i % 3) * 22;
+    const th = 46 + (i % 4) * 14;
+    const ty = VIEW.h - 60;
+    ctx.beginPath();
+    ctx.moveTo(tx - 16, ty);
+    ctx.lineTo(tx, ty - th);
+    ctx.lineTo(tx + 16, ty);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
   // Drifting petals behind everything.
   for (const petal of world.petals) {
     ctx.save();
@@ -72,7 +111,7 @@ function drawBackground(ctx, world) {
     const pulse = 0.75 + 0.25 * Math.sin(world.time * 1.6 + f.phase);
     ctx.save();
     ctx.translate(f.x, f.y);
-    ctx.globalAlpha = 0.28 * pulse;
+    ctx.globalAlpha = 0.42 * pulse;
     ctx.fillStyle = f.color;
     ctx.beginPath();
     ctx.arc(0, 0, f.r * 2.6, 0, Math.PI * 2);
@@ -154,16 +193,28 @@ function drawPollen(ctx, world) {
     const bob = Math.sin(o.phase) * 2;
     ctx.save();
     ctx.translate(o.x, o.y + bob);
-    const halo = ctx.createRadialGradient(0, 0, 1, 0, 0, 16);
-    halo.addColorStop(0, PALETTE.pollenHalo);
+    const haloR = o.golden ? 22 : 16;
+    const halo = ctx.createRadialGradient(0, 0, 1, 0, 0, haloR);
+    halo.addColorStop(0, o.golden ? 'rgba(255, 209, 102, 0.6)' : PALETTE.pollenHalo);
     halo.addColorStop(1, 'rgba(255, 230, 109, 0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.arc(0, 0, haloR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = PALETTE.pollen;
+    if (o.golden) {
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.8)';
+      ctx.lineWidth = 1.5;
+      for (let k = 0; k < 4; k++) {
+        const a = o.phase + (k * Math.PI) / 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 9, Math.sin(a) * 9);
+        ctx.lineTo(Math.cos(a) * 14, Math.sin(a) * 14);
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = o.golden ? '#fff3c4' : PALETTE.pollen;
     ctx.beginPath();
-    ctx.arc(0, 0, o.size, 0, Math.PI * 2);
+    ctx.arc(0, 0, o.golden ? o.size + 1.5 : o.size, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#fffbe0';
     ctx.beginPath();
@@ -272,29 +323,29 @@ function drawPlayer(ctx, world) {
   ctx.translate(p.x, p.y);
   ctx.globalAlpha = blink ? 0.35 : 1;
   // Glow aura, brighter with charge.
-  const aura = ctx.createRadialGradient(0, 0, 4, 0, 0, 52 + world.charge * 0.25);
-  aura.addColorStop(0, 'rgba(255, 230, 140, ' + (0.28 + world.charge * 0.002) + ')');
+  const aura = ctx.createRadialGradient(0, 0, 4, 0, 0, 58 + world.charge * 0.28);
+  aura.addColorStop(0, 'rgba(255, 230, 140, ' + (0.32 + world.charge * 0.002) + ')');
   aura.addColorStop(1, 'rgba(255, 230, 140, 0)');
   ctx.fillStyle = aura;
   ctx.beginPath();
-  ctx.arc(0, 0, 52 + world.charge * 0.25, 0, Math.PI * 2);
+  ctx.arc(0, 0, 58 + world.charge * 0.28, 0, Math.PI * 2);
   ctx.fill();
   ctx.rotate(p.angle + Math.PI / 2);
   const flap = Math.sin(p.flap) * 0.55;
   // Wings.
   ctx.fillStyle = PALETTE.mothWing;
   ctx.beginPath();
-  ctx.ellipse(-11, -4, 13, 8 + flap * 6, -0.5 - flap * 0.35, 0, Math.PI * 2);
+  ctx.ellipse(-11, -4, 15, 9.5 + flap * 7, -0.5 - flap * 0.35, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(11, -4, 13, 8 + flap * 6, 0.5 + flap * 0.35, 0, Math.PI * 2);
+  ctx.ellipse(11, -4, 15, 9.5 + flap * 7, 0.5 + flap * 0.35, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = PALETTE.mothWingDeep;
   ctx.beginPath();
-  ctx.ellipse(-10, 6, 9, 6, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(-10, 6, 10.5, 7, -0.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(10, 6, 9, 6, 0.4, 0, Math.PI * 2);
+  ctx.ellipse(10, 6, 10.5, 7, 0.4, 0, Math.PI * 2);
   ctx.fill();
   // Body.
   ctx.fillStyle = '#5b4636';
@@ -344,6 +395,17 @@ function drawParticles(ctx, world) {
     ctx.fill();
     ctx.restore();
   }
+  // Dash shockwave rings, expanding and fading.
+  for (const r of world.rings) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, r.life / r.maxLife) * 0.8;
+    ctx.strokeStyle = '#ffe66d';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   for (const t of world.texts) {
     ctx.save();
     ctx.globalAlpha = Math.max(0, t.life / t.maxLife);
@@ -377,10 +439,14 @@ function drawHUD(ctx, world) {
   ctx.fill();
   text(ctx, world.bankedWave + '/' + world.quota + ' banked', qx + qw + 10, 27, 12, PALETTE.text);
 
-  // Night timer.
-  const t = Math.max(0, Math.ceil(world.waveTimeLeft));
-  const tc = t <= 10 ? '#ff5d73' : PALETTE.text;
-  text(ctx, 'NIGHT ' + t + 's', 560, 24, 16, tc);
+  // Night timer — or the boss hunt, once the quota is banked on wave 8.
+  if (world.bossPhase) {
+    text(ctx, 'BREAK THE SOVEREIGN', 560, 24, 16, PALETTE.bloom);
+  } else {
+    const t = Math.max(0, Math.ceil(world.waveTimeLeft));
+    const tc = t <= 10 ? '#ff5d73' : PALETTE.text;
+    text(ctx, 'NIGHT ' + t + 's', 560, 24, 16, tc);
+  }
 
   // Lives as hearts.
   for (let i = 0; i < PLAYER.lives; i++) {
@@ -421,6 +487,25 @@ function drawHUD(ctx, world) {
   if (world.magnetTimer > 0) text(ctx, 'MAGNET ' + Math.ceil(world.magnetTimer) + 's', 16, VIEW.h - 16, 12, '#7fe3c3');
   if (world.slowTimer > 0) text(ctx, 'SLOW NIGHT ' + Math.ceil(world.slowTimer) + 's', 16, VIEW.h - 34, 12, '#7fe3c3');
   ctx.restore();
+
+  // Boss health bar, while the Sovereign lives.
+  if (world.boss) {
+    ctx.save();
+    const bw = 220;
+    const bx = (VIEW.w - bw) / 2;
+    const by = 56;
+    ctx.fillStyle = 'rgba(9, 11, 32, 0.6)';
+    roundRect(ctx, bx - 10, by - 4, bw + 20, 26, 8);
+    ctx.fill();
+    text(ctx, 'NIGHT SOVEREIGN', VIEW.w / 2, by + 6, 11, '#cfc6ff', 'center', '700');
+    for (let i = 0; i < world.boss.maxHp; i++) {
+      ctx.fillStyle = i < world.boss.hp ? '#8b7ff0' : 'rgba(255, 255, 255, 0.16)';
+      ctx.beginPath();
+      ctx.arc(bx + 14 + i * ((bw - 28) / 5), by + 18, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 
   // Wave banner.
   if (world.banner && world.bannerT > 0) {
@@ -542,6 +627,12 @@ function drawVignette(ctx, world) {
     ctx.fillStyle = 'rgba(255, 93, 115, ' + world.flash * 0.35 + ')';
     ctx.fillRect(0, 0, VIEW.w, VIEW.h);
   }
+  // The last ten seconds of a wave pulse red at the edges.
+  if (world.state === 'playing' && !world.bossPhase && world.waveTimeLeft <= 10) {
+    const pulse = 0.1 + 0.08 * Math.sin(world.time * 6);
+    ctx.fillStyle = 'rgba(255, 93, 115, ' + pulse + ')';
+    ctx.fillRect(0, 0, VIEW.w, VIEW.h);
+  }
 }
 
 export function render(ctx, world) {
@@ -554,6 +645,7 @@ export function render(ctx, world) {
   drawPollen(ctx, world);
   drawPowerups(ctx, world);
   drawWisps(ctx, world);
+  if (world.boss) drawBoss(ctx, world);
   drawPlayer(ctx, world);
   drawParticles(ctx, world);
   drawVignette(ctx, world);

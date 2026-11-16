@@ -129,6 +129,8 @@ window.__mothlight = {
   get charge() { return world.charge; },
   get wisps() { return world.wisps.length; },
   get pollen() { return world.pollen.length; },
+  get bossHp() { return world.boss ? world.boss.hp : null; },
+  get bossPhase() { return world.bossPhase; },
   start: () => { if (world.state === 'title') beginFromTitle(); },
   restart: () => { restart(); },
   setLives: (n) => { world.lives = n; },

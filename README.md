@@ -3,8 +3,10 @@
 An original 2D canvas arcade game for make.fun's **best-game-01** bounty.
 Luma the lantern-moth gathers glowpollen in a dark garden, banks it at the
 Heart Bloom, and dashes through the shadow wisps that hunt her. Clear all
-8 waves before the night runs out and the garden blooms; lose all 3 lights
-and the light goes out.
+8 waves before the night runs out — and on wave 8, break the Night
+Sovereign, a six-hit boss that only a dash can crack — and the garden
+blooms; lose all 3 lights and the light goes out. Rare golden moon-pollen
+is worth three carried at once.
 
 ## How to play
 
@@ -40,6 +42,7 @@ network and no libraries are vendored.
 - `game/index.html` — the page, one canvas
 - `game/src/main.js` — bootstrap, loop, state machine, test hook
 - `game/src/world.js` — entities, waves, scoring, collisions
+- `game/src/boss.js` — the Night Sovereign: boss AI, dash-hits, drawing
 - `game/src/render.js` — all drawing: garden, moth, wisps, HUD, screens
 - `game/src/config.js` — tuning constants and palette
 - `game/src/input.js` — keyboard and mouse
