@@ -2,7 +2,7 @@
 // and every screen, all drawn on one canvas. No images are loaded; every
 // flower, wing and glow is drawn here, so the game needs no network.
 
-import { VIEW, PALETTE, PLAYER, WAVES } from './config.js';
+import { VIEW, PALETTE, PLAYER, WAVES, COMBO, CARRY, GREED } from './config.js';
 import { BLOOM, comboMult, waveQuota } from './world.js';
 import { drawBoss } from './boss.js';
 
@@ -185,7 +185,9 @@ function drawBloom(ctx, world) {
   }
   ctx.restore();
 
-  text(ctx, 'HEART BLOOM', BLOOM.x, BLOOM.y + r + 20, 11, PALETTE.dim, 'center', '600');
+  // On the title screen the goal panel sits over the bloom: hide its label
+  // there so no text is half-covered.
+  if (world.state !== 'title') text(ctx, 'HEART BLOOM', BLOOM.x, BLOOM.y + r + 20, 11, PALETTE.dim, 'center', '600');
 }
 
 function drawPollen(ctx, world) {
@@ -225,12 +227,26 @@ function drawPollen(ctx, world) {
 }
 
 function drawWisps(ctx, world) {
+  // Orbiters guard the bloom: show their patrol ring so the player can
+  // read the danger before flying into it.
+  const orbiter = world.wisps.find((w) => w.kind === 'orbiter');
+  if (orbiter) {
+    ctx.save();
+    ctx.setLineDash([6, 8]);
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(BLOOM.x, BLOOM.y, orbiter.orbitR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   for (const w of world.wisps) {
     const wob = Math.sin(w.phase) * 2;
     ctx.save();
     ctx.translate(w.x, w.y + wob);
     const flash = w.telegraph > 0 ? (Math.sin(world.time * 30) > 0 ? 1 : 0.4) : 1;
-    ctx.globalAlpha = 0.9 * flash;
+    // Stalkers fade in and out — their alpha is the tell.
+    ctx.globalAlpha = 0.9 * flash * (w.kind === 'stalker' ? (w.alpha ?? 1) : 1);
     const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, w.radius * 2.2);
     halo.addColorStop(0, 'rgba(139, 127, 240, 0.5)');
     halo.addColorStop(1, 'rgba(139, 127, 240, 0)');
@@ -239,7 +255,7 @@ function drawWisps(ctx, world) {
     ctx.arc(0, 0, w.radius * 2.2, 0, Math.PI * 2);
     ctx.fill();
     // Smoky body with a ragged edge.
-    ctx.fillStyle = w.kind === 'lunger' ? '#6a5fd0' : PALETTE.wisp;
+    ctx.fillStyle = w.kind === 'lunger' ? '#6a5fd0' : w.kind === 'orbiter' ? '#a78bfa' : w.kind === 'stalker' ? '#7a6fd0' : PALETTE.wisp;
     ctx.beginPath();
     for (let k = 0; k <= 10; k++) {
       const a = (k / 10) * Math.PI * 2;
@@ -273,6 +289,21 @@ function drawWisps(ctx, world) {
       ctx.arc(0, 0, w.radius + 4, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (w.kind === 'orbiter') {
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, w.radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (w.kind === 'stalker') {
+      ctx.strokeStyle = 'rgba(207, 198, 255, 0.35)';
+      ctx.setLineDash([3, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, w.radius + 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
@@ -283,25 +314,26 @@ function drawPowerups(ctx, world) {
     ctx.save();
     ctx.translate(u.x, u.y + Math.sin(u.phase) * 3);
     ctx.globalAlpha = blink;
-    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 26);
-    halo.addColorStop(0, 'rgba(127, 227, 195, 0.45)');
-    halo.addColorStop(1, 'rgba(127, 227, 195, 0)');
+    const nova = u.kind === 'nova';
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, nova ? 34 : 26);
+    halo.addColorStop(0, nova ? 'rgba(255, 209, 102, 0.55)' : 'rgba(127, 227, 195, 0.45)');
+    halo.addColorStop(1, nova ? 'rgba(255, 209, 102, 0)' : 'rgba(127, 227, 195, 0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(0, 0, 26, 0, Math.PI * 2);
+    ctx.arc(0, 0, nova ? 34 : 26, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#123b31';
-    ctx.strokeStyle = '#7fe3c3';
+    ctx.fillStyle = nova ? '#3a2c08' : '#123b31';
+    ctx.strokeStyle = nova ? '#ffd166' : '#7fe3c3';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, 0, 13, 0, Math.PI * 2);
+    ctx.arc(0, 0, nova ? 15 : 13, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#7fe3c3';
+    ctx.fillStyle = nova ? '#ffd166' : '#7fe3c3';
     ctx.font = '700 13px "Trebuchet MS", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(u.kind === 'magnet' ? 'M' : u.kind === 'shield' ? 'S' : 'T', 0, 1);
+    ctx.fillText(u.kind === 'magnet' ? 'M' : u.kind === 'shield' ? 'S' : u.kind === 'nova' ? 'N' : 'T', 0, 1);
     ctx.restore();
   }
 }
@@ -460,10 +492,21 @@ function drawHUD(ctx, world) {
     ctx.fill();
   }
 
-  // Carried pollen and combo.
-  text(ctx, 'CARRYING ' + world.carried, 800, 16, 12, PALETTE.pollen, 'left', '600');
+  // Carried pollen and combo. A heavy load (8+) slows the moth — the HUD
+  // says so, and that banking 8+ at once pays the Greed Bonus.
+  const heavy = world.carried >= CARRY.heavyAt;
+  text(ctx, heavy ? 'CARRYING ' + world.carried + ' — HEAVY!' : 'CARRYING ' + world.carried, 800, 16, 12, heavy ? '#ff5d73' : PALETTE.pollen, 'left', '600');
   if (world.combo >= 3) {
     text(ctx, 'COMBO x' + comboMult(world.combo) + ' (' + world.combo + ')', 800, 34, 12, '#7fe3c3');
+    // Combo countdown bar: the chain only lives while the bar does.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+    roundRect(ctx, 800, 41, 120, 4, 2);
+    ctx.fill();
+    ctx.fillStyle = '#7fe3c3';
+    roundRect(ctx, 800, 41, 120 * Math.max(0, world.comboTimer / COMBO.window), 4, 2);
+    ctx.fill();
+  } else if (heavy) {
+    text(ctx, 'GREED BONUS READY — BANK ' + GREED.threshold + '+!', 800, 34, 11, PALETTE.bloom, 'left', '600');
   } else {
     text(ctx, 'BANK AT THE BLOOM', 800, 34, 11, PALETTE.dim, 'left', '600');
   }
@@ -541,25 +584,37 @@ function drawTitle(ctx, world) {
   ctx.fill();
   ctx.restore();
 
-  text(ctx, 'MOTHLIGHT', VIEW.w / 2, 196, 58, PALETTE.text, 'center');
-  text(ctx, 'Garden of the Last Lantern', VIEW.w / 2, 236, 20, PALETTE.bloom, 'center', '600');
-  text(ctx, 'Gather glowpollen. Bank it at the Heart Bloom. Dash through the wisps.', VIEW.w / 2, 286, 16, PALETTE.text, 'center', '600');
-  text(ctx, 'Clear all 8 waves before the night runs out — and the garden blooms.', VIEW.w / 2, 312, 16, PALETTE.dim, 'center', '600');
+  text(ctx, 'MOTHLIGHT', VIEW.w / 2, 188, 58, PALETTE.text, 'center');
+  text(ctx, 'Garden of the Last Lantern', VIEW.w / 2, 228, 20, PALETTE.bloom, 'center', '600');
 
-  text(ctx, 'MOVE', VIEW.w / 2 - 190, 366, 14, PALETTE.bloom, 'center');
-  text(ctx, 'WASD / Arrows', VIEW.w / 2 - 190, 390, 14, PALETTE.text, 'center', '600');
-  text(ctx, 'DASH (scatters wisps)', VIEW.w / 2, 366, 14, PALETTE.bloom, 'center');
-  text(ctx, 'SPACE or Click', VIEW.w / 2, 390, 14, PALETTE.text, 'center', '600');
-  text(ctx, 'PAUSE / MUTE', VIEW.w / 2 + 190, 366, 14, PALETTE.bloom, 'center');
-  text(ctx, 'P / M', VIEW.w / 2 + 190, 390, 14, PALETTE.text, 'center', '600');
+  // The whole game, readable in one glance: goal, win, lose.
+  ctx.save();
+  ctx.fillStyle = 'rgba(9, 11, 32, 0.72)';
+  roundRect(ctx, 170, 252, 620, 96, 12);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 209, 102, 0.45)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 170, 252, 620, 96, 12);
+  ctx.stroke();
+  text(ctx, 'GOAL — Gather glowpollen, bank it at the Heart Bloom', 192, 276, 15, PALETTE.text, 'left', '600');
+  text(ctx, 'WIN  —  Clear all 8 waves & break the Night Sovereign', 192, 302, 15, PALETTE.bloom, 'left', '600');
+  text(ctx, 'LOSE — Lose all 3 lights to wisps or to the night', 192, 328, 15, '#ff8fa0', 'left', '600');
+  ctx.restore();
+
+  text(ctx, 'MOVE', VIEW.w / 2 - 190, 392, 14, PALETTE.bloom, 'center');
+  text(ctx, 'WASD / Arrows', VIEW.w / 2 - 190, 416, 14, PALETTE.text, 'center', '600');
+  text(ctx, 'DASH (scatters wisps)', VIEW.w / 2, 392, 14, PALETTE.bloom, 'center');
+  text(ctx, 'SPACE or Click', VIEW.w / 2, 416, 14, PALETTE.text, 'center', '600');
+  text(ctx, 'PAUSE / MUTE', VIEW.w / 2 + 190, 392, 14, PALETTE.bloom, 'center');
+  text(ctx, 'P / M', VIEW.w / 2 + 190, 416, 14, PALETTE.text, 'center', '600');
 
   const pulse = 0.7 + 0.3 * Math.sin(world.time * 4);
   ctx.save();
   ctx.globalAlpha = pulse;
-  text(ctx, 'Press ENTER or click to begin', VIEW.w / 2, 452, 20, PALETTE.text, 'center');
+  text(ctx, 'Press ENTER or click to begin', VIEW.w / 2, 470, 20, PALETTE.text, 'center');
   ctx.restore();
-  if (world.best > 0) text(ctx, 'Best score: ' + world.best, VIEW.w / 2, 492, 14, PALETTE.dim, 'center', '600');
-  text(ctx, 'Tip: banking pollen grows the bloom — and chained pickups raise your combo.', VIEW.w / 2, 530, 13, PALETTE.dim, 'center', '600');
+  if (world.best > 0) text(ctx, 'Best score: ' + world.best, VIEW.w / 2, 504, 14, PALETTE.dim, 'center', '600');
+  text(ctx, 'Tip: banking 8+ pollen at once pays a Greed Bonus — but a heavy moth flies slower.', VIEW.w / 2, 540, 13, PALETTE.dim, 'center', '600');
 }
 
 function statLine(ctx, label, value, y) {
@@ -567,45 +622,58 @@ function statLine(ctx, label, value, y) {
   text(ctx, String(value), VIEW.w / 2 + 130, y, 16, PALETTE.text, 'right');
 }
 
-function drawWin(ctx, world) {
-  dimScreen(ctx);
-  text(ctx, 'THE GARDEN BLOOMS', VIEW.w / 2, 130, 44, PALETTE.bloom, 'center');
-  text(ctx, 'Every wave cleared — Luma’s light fills the night garden.', VIEW.w / 2, 180, 17, PALETTE.text, 'center', '600');
-  statLine(ctx, 'FINAL SCORE', world.score, 250);
-  statLine(ctx, 'POLLEN BANKED', world.bankedTotal, 282);
-  statLine(ctx, 'WISPS SCATTERED', world.stats.wispsScattered, 314);
-  statLine(ctx, 'BEST COMBO', world.maxCombo, 346);
-  statLine(ctx, 'TIME', Math.round(world.endedAt) + 's', 378);
-  if (world.score >= world.best && world.score > 0) {
-    text(ctx, '★ NEW BEST SCORE ★', VIEW.w / 2, 424, 18, PALETTE.bloom, 'center');
-  }
+function drawRestartPill(ctx, world, y) {
   const pulse = 0.7 + 0.3 * Math.sin(world.time * 4);
   ctx.save();
   ctx.globalAlpha = pulse;
-  text(ctx, 'Press R or ENTER to play again', VIEW.w / 2, 478, 19, PALETTE.text, 'center');
+  ctx.fillStyle = 'rgba(255, 209, 102, 0.16)';
+  roundRect(ctx, VIEW.w / 2 - 150, y - 21, 300, 42, 21);
+  ctx.fill();
+  ctx.strokeStyle = PALETTE.bloom;
+  ctx.lineWidth = 2;
+  roundRect(ctx, VIEW.w / 2 - 150, y - 21, 300, 42, 21);
+  ctx.stroke();
+  text(ctx, '↻  PLAY AGAIN  —  press R', VIEW.w / 2, y, 18, PALETTE.text, 'center');
   ctx.restore();
+}
+
+function drawWin(ctx, world) {
+  dimScreen(ctx);
+  text(ctx, 'THE GARDEN BLOOMS', VIEW.w / 2, 118, 44, PALETTE.bloom, 'center');
+  text(ctx, 'Every wave cleared — Luma’s light fills the night garden.', VIEW.w / 2, 166, 17, PALETTE.text, 'center', '600');
+  statLine(ctx, 'FINAL SCORE', world.score, 232);
+  statLine(ctx, 'POLLEN BANKED', world.bankedTotal, 262);
+  statLine(ctx, 'WISPS SCATTERED', world.stats.wispsScattered, 292);
+  statLine(ctx, 'BEST COMBO', world.maxCombo, 322);
+  statLine(ctx, 'DASHES', world.stats.dashes, 352);
+  statLine(ctx, 'POWER-UPS', world.stats.powerups, 382);
+  statLine(ctx, 'TIME', Math.round(world.endedAt) + 's', 412);
+  if (world.score >= world.best && world.score > 0) {
+    text(ctx, '★ NEW BEST SCORE ★', VIEW.w / 2, 452, 18, PALETTE.bloom, 'center');
+  }
+  drawRestartPill(ctx, world, 512);
 }
 
 function drawOver(ctx, world) {
   dimScreen(ctx);
-  text(ctx, 'THE LIGHT GOES OUT', VIEW.w / 2, 130, 42, '#ff5d73', 'center');
-  text(ctx, 'The wisps close in and the garden sleeps in darkness.', VIEW.w / 2, 180, 17, PALETTE.text, 'center', '600');
-  statLine(ctx, 'SCORE', world.score, 250);
-  statLine(ctx, 'WAVE REACHED', world.wave + ' / ' + WAVES.total, 282);
-  statLine(ctx, 'POLLEN BANKED', world.bankedTotal, 314);
-  statLine(ctx, 'WISPS SCATTERED', world.stats.wispsScattered, 346);
-  statLine(ctx, 'BEST SCORE', world.best, 378);
-  const pulse = 0.7 + 0.3 * Math.sin(world.time * 4);
-  ctx.save();
-  ctx.globalAlpha = pulse;
-  text(ctx, 'Press R or ENTER to try again', VIEW.w / 2, 452, 19, PALETTE.text, 'center');
-  ctx.restore();
+  text(ctx, 'THE LIGHT GOES OUT', VIEW.w / 2, 118, 42, '#ff5d73', 'center');
+  text(ctx, 'The wisps close in and the garden sleeps in darkness.', VIEW.w / 2, 166, 17, PALETTE.text, 'center', '600');
+  statLine(ctx, 'SCORE', world.score, 232);
+  statLine(ctx, 'WAVE REACHED', world.wave + ' / ' + WAVES.total, 262);
+  statLine(ctx, 'POLLEN BANKED', world.bankedTotal, 292);
+  statLine(ctx, 'WISPS SCATTERED', world.stats.wispsScattered, 322);
+  statLine(ctx, 'DASHES', world.stats.dashes, 352);
+  statLine(ctx, 'POWER-UPS', world.stats.powerups, 382);
+  statLine(ctx, 'BEST SCORE', world.best, 412);
+  drawRestartPill(ctx, world, 496);
 }
 
 function drawPause(ctx, world) {
   dimScreen(ctx);
-  text(ctx, 'PAUSED', VIEW.w / 2, 240, 40, PALETTE.text, 'center');
-  text(ctx, 'Press P to keep playing — M mutes the music', VIEW.w / 2, 292, 16, PALETTE.dim, 'center', '600');
+  text(ctx, 'PAUSED', VIEW.w / 2, 220, 40, PALETTE.text, 'center');
+  text(ctx, 'Press P to keep playing — M mutes the music', VIEW.w / 2, 272, 16, PALETTE.dim, 'center', '600');
+  text(ctx, 'WASD move  ·  SPACE dash  ·  R restarts the run', VIEW.w / 2, 306, 15, PALETTE.text, 'center', '600');
+  text(ctx, 'Bank the quota at the Heart Bloom before the night runs out.', VIEW.w / 2, 336, 14, PALETTE.dim, 'center', '600');
 }
 
 // The vignette closes in as the night timer runs low: the garden literally

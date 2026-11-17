@@ -99,6 +99,19 @@ export function createAudio() {
       [440, 554.37, 659.25, 880].forEach((f, i) => this.tone(f, 0.16, 'sine', 0.14, i * 0.05));
     },
 
+    // Lantern Nova: a bright rising chord as every wisp scatters.
+    nova() {
+      if (!this.ensure()) return;
+      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.15, i * 0.04));
+      this.tone(180, 0.4, 'sine', 0.16, 0, 60);
+    },
+
+    // Greed Bonus: a quick golden arpeggio when a big bank lands.
+    greed() {
+      if (!this.ensure()) return;
+      [783.99, 1046.5, 1318.5, 1567.98].forEach((f, i) => this.tone(f, 0.18, 'sine', 0.14, i * 0.05));
+    },
+
     // The Sovereign wakes: a low swell that says something big is here.
     roar() {
       if (!this.ensure()) return;

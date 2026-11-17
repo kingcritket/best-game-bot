@@ -57,7 +57,16 @@ export const WISP = {
   spawnInterval: 2.6,
   spawnStepPerWave: 0.22,
   maxExtra: 3,
+  // Late waves thicken the dark: every wisp moves faster from wave 7 on.
+  lateWave: 7,
+  lateSpeedMult: 1.15,
 };
+
+// Carrying a heavy load is a choice: bank 8+ pollen at once for a Greed
+// Bonus (big score, dash fully refilled), but a heavy moth flies slower
+// and every wisp you pass is a risk. Bank early and safe, or push your luck.
+export const GREED = { threshold: 8, bonus: 100 };
+export const CARRY = { heavyAt: 8, slowMult: 0.88 };
 
 export const WAVES = {
   total: 8,
@@ -80,6 +89,8 @@ export const POWERUP = {
   spawnInterval: 17,
   magnetTime: 8,
   slowTime: 5,
+  // Lantern Nova is rare: it scatters every wisp on screen at once.
+  novaChance: 0.15,
 };
 
 // The Night Sovereign, boss of wave 8: six dash-hits to break.

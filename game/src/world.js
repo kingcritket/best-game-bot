@@ -6,9 +6,10 @@
 // waves and the garden blooms — that is the win. Lose all three lives and
 // the light goes out.
 
-import { VIEW, PALETTE, PLAYER, POLLEN, WISP, WAVES, COMBO, SCORE, POWERUP, BOSS, GOLDEN } from './config.js';
+import { VIEW, PALETTE, PLAYER, POLLEN, WISP, WAVES, COMBO, SCORE, POWERUP, BOSS, GOLDEN, GREED, CARRY } from './config.js';
 import { makeRng, range, pick, chance, clamp, dist2 } from './random.js';
 import { createBoss, updateBoss } from './boss.js';
+import { waveThreat, waveSpeedMult } from './waves.js';
 
 const BLOOM = { x: VIEW.w / 2, y: VIEW.h / 2, baseRadius: 46 };
 const MARGIN = 26;
@@ -165,9 +166,13 @@ function spawnWisp(world) {
   else if (edge === 2) { x = range(world.rng, 0, VIEW.w); y = VIEW.h + 20; }
   else { x = -20; y = range(world.rng, 0, VIEW.h); }
   let kind = 'chaser';
-  if (world.wave >= 5 && chance(world.rng, 0.3)) kind = 'lunger';
+  // One new danger per wave: splitters, then orbiters guarding the bloom,
+  // lungers, and stalkers that fade in and out of sight.
+  if (world.wave >= 6 && chance(world.rng, 0.25)) kind = 'stalker';
+  else if (world.wave >= 5 && chance(world.rng, 0.3)) kind = 'lunger';
+  else if (world.wave >= 4 && chance(world.rng, 0.3)) kind = 'orbiter';
   else if (world.wave >= 3 && chance(world.rng, 0.3)) kind = 'splitter';
-  const speed = (WISP.baseSpeed + (world.wave - 1) * WISP.speedPerWave) * range(world.rng, 0.9, 1.15);
+  const speed = (WISP.baseSpeed + (world.wave - 1) * WISP.speedPerWave) * waveSpeedMult(world.wave) * range(world.rng, 0.9, 1.15);
   world.wisps.push({
     x, y, vx: 0, vy: 0, kind,
     radius: kind === 'splitter' ? 20 : 16,
@@ -177,11 +182,19 @@ function spawnWisp(world) {
     lunging: 0,
     telegraph: 0,
     wobble: range(world.rng, 0.6, 1.4),
+    // Orbiters circle the Heart Bloom instead of chasing the moth.
+    orbitAngle: range(world.rng, 0, Math.PI * 2),
+    orbitR: range(world.rng, 95, 135),
+    // Stalkers fade: alpha is recomputed every step from their phase.
+    alpha: 1,
   });
 }
 
 function spawnPowerup(world) {
-  const kinds = ['magnet', 'shield', 'slow'];
+  // Lantern Nova is rare: a fourth power-up that scatters every wisp.
+  const kinds = chance(world.rng, POWERUP.novaChance)
+    ? ['nova']
+    : ['magnet', 'shield', 'slow'];
   world.powerups.push({
     x: range(world.rng, 60, VIEW.w - 60),
     y: range(world.rng, 70, VIEW.h - 60),
@@ -189,6 +202,24 @@ function spawnPowerup(world) {
     phase: range(world.rng, 0, Math.PI * 2),
     life: 12,
   });
+}
+
+// Lantern Nova: every wisp on screen scatters at once, worth a wisp each.
+function detonateNova(world, audio) {
+  const n = world.wisps.length;
+  if (n === 0) return;
+  for (const w of world.wisps) {
+    burst(world, w.x, w.y, PALETTE.wisp, 12, 170, 3);
+    world.stats.wispsScattered += 1;
+  }
+  world.wisps.length = 0;
+  world.combo += 2;
+  world.comboTimer = COMBO.window;
+  addScore(world, n * SCORE.wisp * comboMult(world.combo));
+  floatText(world, world.player.x, world.player.y - 34, 'LANTERN NOVA! +' + (n * SCORE.wisp * comboMult(world.combo)), '#ffd166');
+  world.flash = 0.35;
+  world.shake = 8;
+  audio.nova();
 }
 
 function burst(world, x, y, color, n, speed = 120, size = 3) {
@@ -304,10 +335,11 @@ function clearWave(world, audio) {
     audio.roar();
     showBanner(world, 'Wave 8 — the Night Sovereign wakes', 'Bank 40 pollen — and break the Sovereign');
   } else {
+    const threat = waveThreat(world.wave);
     showBanner(
       world,
-      'Wave ' + world.wave + ' — the dark deepens',
-      'Bank ' + world.quota + ' pollen before the night ends',
+      'Wave ' + world.wave + ' — ' + threat.name,
+      'Bank ' + world.quota + ' pollen. ' + threat.line,
     );
   }
 }
@@ -381,9 +413,11 @@ export function updateWorld(world, dt, input, audio) {
     p.vx *= Math.pow(PLAYER.friction, dt * 60);
     p.vy *= Math.pow(PLAYER.friction, dt * 60);
     const speed = Math.hypot(p.vx, p.vy);
-    if (speed > PLAYER.maxSpeed) {
-      p.vx = (p.vx / speed) * PLAYER.maxSpeed;
-      p.vy = (p.vy / speed) * PLAYER.maxSpeed;
+    // A heavy load slows the moth: carrying 8+ pollen is a real choice.
+    const maxSpeed = PLAYER.maxSpeed * (world.carried >= CARRY.heavyAt ? CARRY.slowMult : 1);
+    if (speed > maxSpeed) {
+      p.vx = (p.vx / speed) * maxSpeed;
+      p.vy = (p.vy / speed) * maxSpeed;
     }
     if (speed > 12) p.angle = Math.atan2(p.vy, p.vx);
   }
@@ -469,9 +503,17 @@ export function updateWorld(world, dt, input, audio) {
     const n = world.carried;
     world.bankedWave += n;
     world.bankedTotal += n;
-    addScore(world, n * SCORE.bank + (n >= 5 ? 25 : 0));
-    floatText(world, BLOOM.x, BLOOM.y - bloomR - 8, '+' + (n * SCORE.bank) + ' banked', PALETTE.bloom);
+    // Greed Bonus: banking 8+ at once pays extra and refills the dash.
+    const greed = n >= GREED.threshold;
+    addScore(world, n * SCORE.bank + (n >= 5 ? 25 : 0) + (greed ? GREED.bonus : 0));
+    floatText(world, BLOOM.x, BLOOM.y - bloomR - 8, '+' + (n * SCORE.bank) + ' banked' + (greed ? ' — GREED BONUS +' + GREED.bonus : ''), PALETTE.bloom);
     burst(world, BLOOM.x, BLOOM.y, PALETTE.bloom, 10 + n * 2, 160, 3);
+    if (greed) {
+      world.charge = 100;
+      world.shake = Math.max(world.shake, 6);
+      burst(world, BLOOM.x, BLOOM.y, '#ffd166', 24, 240, 4);
+      audio.greed();
+    }
     world.carried = 0;
     audio.bank(n);
     if (world.bankedWave >= world.quota) {
@@ -516,6 +558,27 @@ export function updateWorld(world, dt, input, audio) {
           w.lungeT = range(world.rng, 1.6, 2.6);
         }
       }
+    } else if (w.kind === 'orbiter') {
+      // Orbiters circle the Heart Bloom, guarding the banking run: they
+      // only drift toward the moth when it comes close to the bloom.
+      w.orbitAngle += dt * (speed / w.orbitR);
+      const ox = BLOOM.x + Math.cos(w.orbitAngle) * w.orbitR;
+      const oy = BLOOM.y + Math.sin(w.orbitAngle) * w.orbitR;
+      const bd = Math.hypot(p.x - BLOOM.x, p.y - BLOOM.y);
+      if (bd < 170) {
+        w.x += (dx / d) * speed * 0.8 * dt;
+        w.y += (dy / d) * speed * 0.8 * dt;
+      } else {
+        w.x += (ox - w.x) * Math.min(1, dt * 3);
+        w.y += (oy - w.y) * Math.min(1, dt * 3);
+      }
+    } else if (w.kind === 'stalker') {
+      // Stalkers fade in and out of sight, and quicken when the moth
+      // comes close — the shimmer is the only warning.
+      w.alpha = 0.3 + 0.6 * (0.5 + 0.5 * Math.sin(w.phase * 1.4));
+      const near = d < 180 ? 1.6 : 0.85;
+      w.x += (dx / d) * speed * near * dt;
+      w.y += (dy / d) * speed * near * dt;
     } else {
       // Chasers and splitters wobble as they home in, so they never feel
       // like heat-seeking missiles.
@@ -608,7 +671,9 @@ export function updateWorld(world, dt, input, audio) {
     if (dist2(u.x, u.y, p.x, p.y) < 34 * 34) {
       world.powerups.splice(i, 1);
       world.stats.powerups += 1;
-      if (u.kind === 'magnet') {
+      if (u.kind === 'nova') {
+        detonateNova(world, audio);
+      } else if (u.kind === 'magnet') {
         world.magnetTimer = POWERUP.magnetTime;
         floatText(world, p.x, p.y - 28, 'Pollen Magnet!', '#7fe3c3');
       } else if (u.kind === 'shield') {

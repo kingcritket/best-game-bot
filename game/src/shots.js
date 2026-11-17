@@ -70,7 +70,9 @@ export function stageShot(name, seed) {
   ];
   scatterPollen(world, 14);
   if (name === 'play') {
-    // The climax: wave 8, quota banked, the Sovereign half-broken.
+    // The climax: wave 8, quota banked, the Sovereign half-broken — with
+    // the new threats in frame: an orbiter guarding the bloom, a fading
+    // stalker, a lunger, and a Lantern Nova waiting to be grabbed.
     world.state = 'playing';
     world.wave = 8;
     world.quota = 40;
@@ -82,18 +84,23 @@ export function stageShot(name, seed) {
     world.boss.x = 640;
     world.boss.y = 210;
     world.boss.telegraph = 0.4;
-    world.score = 3420;
-    world.carried = 4;
-    world.combo = 9;
+    world.score = 4150;
+    world.carried = 9;
+    world.combo = 11;
     world.comboTimer = 2.0;
     world.maxCombo = 14;
     world.lives = 2;
     world.charge = 55;
     world.waveTimeLeft = 47;
     world.banner = { text: 'Break the Night Sovereign!', sub: 'The quota is banked — scatter the boss to win' };
-    world.bannerT = 2.0;
-    placeWisps(world, 3, ['chaser', 'splitter', 'lunger']);
-    world.powerups.push({ x: 150, y: 150, kind: 'magnet', phase: 1, life: 10 });
+    world.bannerT = 0; // HUD already says BREAK THE SOVEREIGN; a banner here would cover the boss HP bar.
+    placeWisps(world, 3, ['orbiter', 'stalker', 'lunger']);
+    world.wisps[0].orbitAngle = 0.6;
+    world.wisps[0].orbitR = 115;
+    world.wisps[0].x = 480 + Math.cos(0.6) * 115;
+    world.wisps[0].y = 300 + Math.sin(0.6) * 115;
+    world.wisps[1].alpha = 0.45;
+    world.powerups.push({ x: 150, y: 150, kind: 'nova', phase: 1, life: 10 });
     world.particles.push(
       { x: 620, y: 330, vx: 30, vy: -40, life: 0.6, maxLife: 0.9, size: 3, color: '#ffe66d' },
       { x: 640, y: 350, vx: -20, vy: -60, life: 0.7, maxLife: 0.9, size: 2.5, color: '#ffe66d' },

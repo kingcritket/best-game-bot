@@ -170,3 +170,79 @@ lompatan berarti ke arah papan tengah-atas; top 10 tidak bisa dijanjikan.
 Risiko utama yang tersisa: boss belum pernah dimainkan manusia sungguhan
 (hanya headless + staged shot), jadi keseimbangan wave 8 (kuota 40 +
 boss + wisp) belum teruji rasa mainnya.
+
+---
+
+# REVISI v3 — naik dari 73,30% menuju papan atas (2026-11-17, belum di-submit)
+
+**Perintah parent:** perbaiki entry best-game-01 (v2: rank 1770, judge
+73,30%, interval 68,56–78,03%; cutoff top-10 ~93,94%). Target tuas
+terbesar juri: kriteria 1 (kelengkapan yang TERLIHAT di screenshot) dan
+kriteria 2 (fun & depth).
+
+## Yang berubah (di atas `1b4931a`)
+
+1. **Title screen jadi panel GOAL / WIN / LOSE** (`render.js`): kotak
+   berbingkai yang dibaca sekali lirik — GOAL (kumpul + bank di Heart
+   Bloom), WIN (clear 8 wave & break Sovereign), LOSE (3 lights habis).
+   Label "HEART BLOOM" disembunyikan di title agar tak tertutup panel.
+2. **Dua musuh baru** (`world.js`, `config.js`): **Orbiter** (wave 4+)
+   mengorbit Heart Bloom dan menjaga banking run — cincin orbit putus-putus
+   digambar agar bahayanya terbaca; **Stalker** (wave 6+) memudar
+   (alpha 0,3–0,9) dan mempercepat saat dekat. Keduanya punya warna +
+   cincin pembeda di `render.js`.
+3. **Progresi wave eksplisit** (`game/src/waves.js` baru): tiap wave
+   memperkenalkan satu ancaman baru dengan banner-nya sendiri (W3
+   splitter, W4 orbiter, W5 lunger, W6 stalker, W7 dark thickens —
+   kecepatan wisp +15%, W8 boss). Struktur: satu file, satu tugas.
+4. **Pilihan bermakna — Greed Bonus / beban berat** (`config.js`:
+   `GREED`, `CARRY`): bank 8+ pollen sekaligus = +100 skor + dash
+   terisi penuh; tapi membawa 8+ memperlambat ngengat 12%. HUD
+   menampilkan "CARRYING 9 — HEAVY!" merah + "GREED BONUS READY".
+5. **Power-up ke-4 — Lantern Nova** (N, emas, peluang 15%): menghamburkan
+   SEMUA wisp di layar sekaligus (skor per wisp), lengkap dengan SFX
+   `nova()` + flash. `audio.js` juga dapat `greed()`.
+6. **HUD lebih jujur:** bar countdown combo di bawah teks combo (rantai
+   hanya hidup selama bar-nya), peringatan beban berat, teks greed.
+7. **Layar hasil + pause diperkuat:** tombol pill "↻ PLAY AGAIN — press R"
+   yang berdenyut di layar menang/kalah, statistik DASHES + POWER-UPS
+   ditambahkan; layar pause kini merangkum kontrol + R restart.
+8. **Screenshot:** keempatnya diregenerasi dari render nyata (Playwright);
+   shot play kini menampilkan boss (HP 3/6) + orbiter + stalker + Nova "N"
+   + carried 9 (HEAVY) + bar combo — kedalaman v3 dalam satu frame.
+   Perbaikan shot: banner play dimatikan (`bannerT = 0`) karena menutupi
+   bar HP boss.
+
+## Hasil tes v3
+
+- **Tes logika headless** (`/tmp/moth-test-v3.mjs`, Node): **24/24 PASS** —
+  regresi v1/v2 (start, kumpul, bank, dash, boss 6 HP, menang wave 8,
+  game over, soak) + 7 baru (greed +100 & refill, heavy slow, orbiter
+  spawn wave 4 + bertahan di orbit, stalker spawn wave 6 + alpha memudar,
+  nova menghabisi semua wisp, ancaman wave 3–7 + speed 1,15).
+  Dua kegagalan pertama adalah cacat tes (pemain berdiri dekat bloom
+  sehingga orbiter mengejar, bukan mengorbit; loop stalker berhenti dini)
+  — diperbaiki di tes, bukan di game.
+- **Playtest browser nyata** (Playwright + Chromium headless): title →
+  Enter → playing; steering mengumpulkan pollen (skor 0 → 10, carried 2);
+  dash jalan (charge 67 → 55); pause/resume jalan; timeout paksa →
+  game over → R restart (skor reset 0). **0 console error, 0 failed
+  request, 0 external request.**
+- **Screenshot:** 4 file diregenerasi (960×600, JPEG q88, ~50–67 KiB),
+  dicek visual: panel GOAL/WIN/LOSE terbaca, bar HP boss terlihat,
+  cincin orbit + Nova "N" terlihat, pill PLAY AGAIN terbaca di win/end.
+- **`main.ts`:** dua run menghasilkan /output **byte-identik**;
+  `dossier.json` 379.682 byte (< 1,5 MiB), teks 81.690 byte (< 160 KiB),
+  11 file game, 4 gambar.
+- **Kit check:** (tidak diulang — tidak ada perubahan pada main.ts/vendor/
+  struktur repo; gate lokal disimulasikan via main.ts di atas)
+
+## Penilaian jujur
+
+v3 menyerang tepat dua kriteria yang paling menentukan skor pairwise:
+kelengkapan (title + hasil + restart kini eksplisit di screenshot) dan
+depth (2 musuh baru, progresi wave bernama, pilihan risk/reward, power-up
+ke-4). Lompatan material dari 73,30% masuk akal; tapi cutoff top-10
+~93,94% masih jauh — v3 bukan janji top 10, melainkan langkah terbesar
+yang bisa diambil tanpa mengganti game. Risiko sisa: keseimbangan wave
+8 + greed belum diuji manusia sungguhan.
